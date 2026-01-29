@@ -1,0 +1,340 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  COORD
+  DIRECTOR
+  DEAN
+  EXEC
+  COMPLIANCE
+  COMPANY
+}
+
+enum EmailType {
+  PERSONAL
+  INSTITUTIONAL
+  CORPORATE
+}
+
+enum Stage {
+  PREINDUCTION
+  ACADEMIC_CHECK
+  FORMALIZATION_DOCS
+  LEGALIZATION
+  EVALUATION_1
+  FOLLOW_UP
+  EVALUATION_2
+  DEFENSE
+  CLOSE
+}
+
+enum DocumentReviewStatus {
+  APPROVED
+  REJECTED
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+}
+
+enum CompanyStatus {
+  WITH_AGREEMENT
+  PENDING_COMPLIANCE
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id           String      @id @default(cuid())
+  primaryEmail String      @unique
+  passwordHash String
+  role         Role
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  emails       UserEmail[]
+  staffScopes  StaffScope[]
+  cases        PracticeCase[] @relation("StudentCases")
+}
+
+model UserEmail {
+  id         String    @id @default(cuid())
+  userId     String
+  email      String    @unique
+  type       EmailType
+  verifiedAt DateTime?
+  isPrimary  Boolean   @default(false)
+  user       User      @relation(fields: [userId], references: [id])
+}
+
+model School {
+  id       String    @id @default(cuid())
+  name     String
+  programs Program[]
+}
+
+model Program {
+  id       String   @id @default(cuid())
+  name     String
+  schoolId String
+  school   School   @relation(fields: [schoolId], references: [id])
+  cases    PracticeCase[]
+}
+
+model StaffScope {
+  id        String   @id @default(cuid())
+  userId    String
+  schoolId  String?
+  programId String?
+  user      User     @relation(fields: [userId], references: [id])
+  school    School?  @relation(fields: [schoolId], references: [id])
+  program   Program? @relation(fields: [programId], references: [id])
+}
+
+model PracticeCase {
+  id          String       @id @default(cuid())
+  studentId   String
+  schoolId    String
+  programId   String
+  currentStage Stage       @default(PREINDUCTION)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  student     User         @relation("StudentCases", fields: [studentId], references: [id])
+  school      School       @relation(fields: [schoolId], references: [id])
+  program     Program      @relation(fields: [programId], references: [id])
+  stageChecks StageCheck[]
+  documents   DocumentUpload[]
+  placement   PracticePlacement?
+  evaluations Evaluation[]
+  followUps   FollowUp[]
+  defense     Defense?
+  complianceScores ComplianceScore[]
+  finalGrade  FinalGrade?
+}
+
+model StageCheck {
+  id        String   @id @default(cuid())
+  caseId    String
+  stage     Stage
+  status    String
+  notes     String?
+  createdAt DateTime @default(now())
+  case      PracticeCase @relation(fields: [caseId], references: [id])
+}
+
+model DocumentType {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  isRequired  Boolean  @default(true)
+}
+
+model DocumentUpload {
+  id           String   @id @default(cuid())
+  caseId       String
+  documentTypeId String
+  fileUrl      String
+  version      Int      @default(1)
+  hash         String
+  isLocked     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  case         PracticeCase @relation(fields: [caseId], references: [id])
+  documentType DocumentType @relation(fields: [documentTypeId], references: [id])
+  reviews      DocumentReview[]
+}
+
+model DocumentReview {
+  id           String   @id @default(cuid())
+  documentId   String
+  reviewerId   String
+  status       DocumentReviewStatus
+  observation  String?
+  createdAt    DateTime @default(now())
+  document     DocumentUpload @relation(fields: [documentId], references: [id])
+  reviewer     User           @relation(fields: [reviewerId], references: [id])
+}
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  status      CompanyStatus @default(PENDING_COMPLIANCE)
+  createdAt   DateTime @default(now())
+  vacancies   Vacancy[]
+  documents   CompanyDocumentUpload[]
+  reviews     CompanyComplianceReview[]
+}
+
+model CompanyDocumentType {
+  id          String   @id @default(cuid())
+  name        String
+  isRequired  Boolean  @default(true)
+}
+
+model CompanyDocumentUpload {
+  id           String   @id @default(cuid())
+  companyId    String
+  documentTypeId String
+  fileUrl      String
+  createdAt    DateTime @default(now())
+  company      Company @relation(fields: [companyId], references: [id])
+  documentType CompanyDocumentType @relation(fields: [documentTypeId], references: [id])
+}
+
+model CompanyComplianceReview {
+  id         String   @id @default(cuid())
+  companyId  String
+  reviewerId String
+  status     DocumentReviewStatus
+  observation String?
+  createdAt  DateTime @default(now())
+  company    Company @relation(fields: [companyId], references: [id])
+  reviewer   User    @relation(fields: [reviewerId], references: [id])
+}
+
+model Vacancy {
+  id          String   @id @default(cuid())
+  companyId   String
+  title       String
+  description String
+  salary      String?
+  createdAt   DateTime @default(now())
+  company     Company  @relation(fields: [companyId], references: [id])
+  programs    VacancyProgram[]
+  applications Application[]
+}
+
+model VacancyProgram {
+  id        String   @id @default(cuid())
+  vacancyId String
+  programId String
+  vacancy   Vacancy @relation(fields: [vacancyId], references: [id])
+  program   Program @relation(fields: [programId], references: [id])
+}
+
+model Application {
+  id         String   @id @default(cuid())
+  vacancyId  String
+  caseId     String
+  createdAt  DateTime @default(now())
+  vacancy    Vacancy @relation(fields: [vacancyId], references: [id])
+  case       PracticeCase @relation(fields: [caseId], references: [id])
+}
+
+model PracticePlacement {
+  id         String   @id @default(cuid())
+  caseId     String   @unique
+  companyId  String
+  supervisorEmail String
+  startDate  DateTime
+  endDate    DateTime?
+  city       String
+  modality   String
+  createdAt  DateTime @default(now())
+  case       PracticeCase @relation(fields: [caseId], references: [id])
+  company    Company @relation(fields: [companyId], references: [id])
+}
+
+model Evaluation {
+  id        String   @id @default(cuid())
+  caseId    String
+  number    Int
+  score     Float?
+  evaluatorEmail String
+  submittedAt DateTime?
+  case      PracticeCase @relation(fields: [caseId], references: [id])
+}
+
+model FollowUp {
+  id        String   @id @default(cuid())
+  caseId    String
+  notes     String
+  createdAt DateTime @default(now())
+  case      PracticeCase @relation(fields: [caseId], references: [id])
+}
+
+model Defense {
+  id        String   @id @default(cuid())
+  caseId    String   @unique
+  score     Float?
+  juryNotes String?
+  scheduledAt DateTime?
+  case      PracticeCase @relation(fields: [caseId], references: [id])
+}
+
+model ComplianceItem {
+  id        String   @id @default(cuid())
+  name      String
+  semester  String
+  weight    Float
+}
+
+model ComplianceScore {
+  id        String   @id @default(cuid())
+  caseId    String
+  itemId    String
+  score     Float
+  case      PracticeCase @relation(fields: [caseId], references: [id])
+  item      ComplianceItem @relation(fields: [itemId], references: [id])
+}
+
+model FinalGrade {
+  id        String   @id @default(cuid())
+  caseId    String   @unique
+  score     Float?
+  calculatedAt DateTime @default(now())
+  case      PracticeCase @relation(fields: [caseId], references: [id])
+}
+
+model Ticket {
+  id        String   @id @default(cuid())
+  caseId    String
+  status    TicketStatus @default(OPEN)
+  createdAt DateTime @default(now())
+  messages  TicketMessage[]
+  case      PracticeCase @relation(fields: [caseId], references: [id])
+}
+
+model TicketMessage {
+  id        String   @id @default(cuid())
+  ticketId  String
+  senderId  String
+  message   String
+  createdAt DateTime @default(now())
+  ticket    Ticket @relation(fields: [ticketId], references: [id])
+  sender    User   @relation(fields: [senderId], references: [id])
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+  schoolId  String?
+  programId String?
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  entity    String
+  entityId  String
+  userId    String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+}
+
+model EmailLog {
+  id        String   @id @default(cuid())
+  to        String
+  subject   String
+  status    String
+  createdAt DateTime @default(now())
+}
